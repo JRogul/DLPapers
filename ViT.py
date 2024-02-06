@@ -1,6 +1,49 @@
 import torch
 import torch.nn as nn
 from einops.layers.torch import Rearrange
+from einops import rearrange
+
+
+class MLP(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim  = dim
+
+        self.norm = nn.LayerNorm(self.dim)
+        self.mlp = nn.Sequential(nn.Linear(self.dim, self.dim * 4 ),
+                                nn.GELU(),
+                                nn.Linear(self.dim * 4, self.dim))
+    def forward(self, x):
+
+        return self.mlp(x)
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, dim, heads, dim_head):
+        super().__init__()
+        self.heads = heads
+        self.dim_head = dim_head
+
+        self.norm = nn.LayerNorm(dim)
+        self.queries = nn.Linear(dim, dim)
+        self.keys = nn.Linear(dim, dim)
+        self.values = nn.Linear(dim, dim)
+        self.softmax = nn.Softmax(dim=3)
+
+    def forward(self, x):
+        out =  self.norm(x)
+        
+        q = self.queries(out)
+        k = self.keys(out)
+        v = self.values(out)
+
+        q = rearrange(q, 'b n (h d) -> b h n d', h = self.heads)
+        k = rearrange(k, 'b n (h d) -> b h n d', h = self.heads)
+        v = rearrange(v, 'b n (h d) -> b h n d', h = self.heads)
+
+        att = self.softmax((q @ k.transpose(2, 3)) / torch.sqrt(torch.tensor(self.dim_head))) @ v
+        att = rearrange(att, 'b h n d -> b n (h d)', h=self.heads)
+        return att
 
 
 class ViT(nn.Module):
